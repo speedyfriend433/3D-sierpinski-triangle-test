@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Customizable 3D Sierpiński Tetrahedron</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      height: 100%;
+    }
+    #gui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 100;
+      color: #fff;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="gui"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Include OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+  <!-- Include dat.GUI for parameter controls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+  <script>
+    // Set up scene, camera, renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+    // Start the camera far enough to see the fractal.
+    camera.position.set(0, 0, 10);
+    
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    
+    // OrbitControls to allow interactive rotation and zoom.
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    
+    // Resize handling.
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    
+    // A group to hold our fractal geometry so we can easily remove/rebuild it.
+    let fractalGroup = new THREE.Group();
+    scene.add(fractalGroup);
+    
+    // Default parameters.
+    const params = {
+      recursionDepth: 3,
+      autoZoomSpeed: 0.02,
+      autoZoom: true,
+      resetZoomThreshold: 4, // When camera gets closer than this distance, reset.
+      wireframe: false
+    };
+    
+    // dat.GUI controls.
+    const gui = new dat.GUI({ autoPlace: false });
+    document.getElementById('gui').appendChild(gui.domElement);
+    gui.add(params, 'recursionDepth', 0, 6, 1).name("Recursion Depth").onFinishChange(generateFractal);
+    gui.add(params, 'autoZoom').name("Auto Zoom");
+    gui.add(params, 'autoZoomSpeed', 0.005, 0.1, 0.005).name("Zoom Speed");
+    gui.add(params, 'wireframe').name("Wireframe").onChange(() => {
+      fractalGroup.traverse(child => {
+        if(child.isMesh){
+          child.material.wireframe = params.wireframe;
+        }
+      });
+    });
+    
+    // Helper: returns the midpoint between two THREE.Vector3 objects.
+    function midpoint(v1, v2) {
+      return new THREE.Vector3(
+        (v1.x + v2.x) / 2,
+        (v1.y + v2.y) / 2,
+        (v1.z + v2.z) / 2
+      );
+    }
+    
+    // Create a tetrahedron (3-simplex) geometry given 4 vertices.
+    function createTetrahedronGeometry(v0, v1, v2, v3) {
+      const geometry = new THREE.BufferGeometry();
+      // A tetrahedron has 4 faces (triangles):
+      const vertices = [
+        ...v0.toArray(), ...v1.toArray(), ...v2.toArray(), // Face 1
+        ...v0.toArray(), ...v1.toArray(), ...v3.toArray(), // Face 2
+        ...v0.toArray(), ...v2.toArray(), ...v3.toArray(), // Face 3
+        ...v1.toArray(), ...v2.toArray(), ...v3.toArray()  // Face 4
+      ];
+      const positions = new Float32Array(vertices);
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+    
+    // Recursively generate a Sierpiński tetrahedron.
+    function sierpinskiTetrahedron(v0, v1, v2, v3, depth) {
+      const geometries = [];
+      if(depth === 0) {
+        // Create one tetrahedron geometry.
+        const geom = createTetrahedronGeometry(v0, v1, v2, v3);
+        geometries.push(geom);
+      } else {
+        // For each vertex of the tetrahedron, create a smaller tetrahedron using the vertex and the midpoints of the three edges emanating from it.
+        const m01 = midpoint(v0, v1);
+        const m02 = midpoint(v0, v2);
+        const m03 = midpoint(v0, v3);
+        const m12 = midpoint(v1, v2);
+        const m13 = midpoint(v1, v3);
+        const m23 = midpoint(v2, v3);
+        
+        // Four tetrahedrons at the vertices:
+        geometries.push(...sierpinskiTetrahedron(v0, m01, m02, m03, depth - 1));
+        geometries.push(...sierpinskiTetrahedron(m01, v1, m12, m13, depth - 1));
+        geometries.push(...sierpinskiTetrahedron(m02, m12, v2, m23, depth - 1));
+        geometries.push(...sierpinskiTetrahedron(m03, m13, m23, v3, depth - 1));
+      }
+      return geometries;
+    }
+    
+    // Build and add the fractal geometry.
+    function generateFractal() {
+      // Remove previous fractal.
+      while(fractalGroup.children.length > 0) {
+        const child = fractalGroup.children[0];
+        child.geometry.dispose();
+        child.material.dispose();
+        fractalGroup.remove(child);
+      }
+      // Define the initial tetrahedron vertices.
+      // They are chosen so the tetrahedron is centered at the origin.
+      const size = 4;
+      const v0 = new THREE.Vector3(0, size, 0);
+      const v1 = new THREE.Vector3(-size, -size, size);
+      const v2 = new THREE.Vector3(size, -size, size);
+      const v3 = new THREE.Vector3(0, -size, -size);
+      
+      // Recursively create all tetrahedrons.
+      const geometries = sierpinskiTetrahedron(v0, v1, v2, v3, params.recursionDepth);
+      
+      // Merge the geometries or add them individually.
+      const material = new THREE.MeshNormalMaterial({ wireframe: params.wireframe, flatShading: true });
+      geometries.forEach(geom => {
+        const mesh = new THREE.Mesh(geom, material.clone());
+        fractalGroup.add(mesh);
+      });
+    }
+    
+    generateFractal();
+    
+    // Automatic zoom settings.
+    const startCameraZ = camera.position.z;
+    let zoomDirection = -1; // -1 means zooming in
+    
+    // Animation loop.
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      // Rotate the fractal slowly.
+      fractalGroup.rotation.y += 0.005;
+      fractalGroup.rotation.x += 0.003;
+      
+      // Auto zoom effect if enabled.
+      if(params.autoZoom) {
+        camera.position.z += zoomDirection * params.autoZoomSpeed;
+        // When the camera gets too close, reset its position.
+        if(camera.position.z < params.resetZoomThreshold) {
+          camera.position.z = startCameraZ;
+          // Optionally, you can increase the recursion depth (if not already at maximum).
+          if(params.recursionDepth < 6) {
+            params.recursionDepth++;
+            gui.__controllers.find(c => c.property === "recursionDepth").setValue(params.recursionDepth);
+            generateFractal();
+          }
+        }
+      }
+      
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    
+    animate();
+  </script>
+</body>
+</html>
