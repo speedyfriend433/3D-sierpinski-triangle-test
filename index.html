@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Spinning 3D Sierpiński Tetrahedron</title>
+  <title>Spinning 3D Sierpiński Tetrahedron with Auto Zoom</title>
   <style>
     body {
       margin: 0;
@@ -35,7 +35,9 @@
       0.1,
       1000
     );
-    camera.position.set(0, 0, 15);
+    // Start the camera at a default distance.
+    const startCameraZ = 15;
+    camera.position.set(0, 0, startCameraZ);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -54,6 +56,9 @@
       spinSpeedY: 0.01,
       spinSpeedZ: 0.0,
       wireframe: false,
+      autoZoomEnabled: false,   // New: auto zoom toggle
+      zoomSpeed: 0.05,          // New: how fast the camera zooms in
+      zoomThreshold: 5          // New: when camera.position.z goes below this, reset zoom
     };
 
     const gui = new GUI({ autoPlace: false });
@@ -71,9 +76,12 @@
         }
       });
     });
+    gui.add(params, 'autoZoomEnabled').name("Auto Zoom");
+    gui.add(params, 'zoomSpeed', 0.005, 0.2, 0.005).name("Zoom Speed");
+    gui.add(params, 'zoomThreshold', 1, 10, 0.5).name("Zoom Threshold");
 
     // --- Fractal Creation ---
-    // A group to hold our fractal meshes
+    // A group to hold our fractal meshes.
     let fractalGroup = new THREE.Group();
     scene.add(fractalGroup);
 
@@ -89,7 +97,7 @@
     // Create a tetrahedron geometry given four vertices.
     function createTetrahedronGeometry(v0, v1, v2, v3) {
       const geometry = new THREE.BufferGeometry();
-      // A tetrahedron has 4 faces.
+      // A tetrahedron has 4 triangular faces.
       const vertices = [
         ...v0.toArray(), ...v1.toArray(), ...v2.toArray(), // Face 1
         ...v0.toArray(), ...v1.toArray(), ...v3.toArray(), // Face 2
@@ -161,10 +169,23 @@
     // --- Animation ---
     function animate() {
       requestAnimationFrame(animate);
+
       // Apply spinning (customizable via the GUI).
       fractalGroup.rotation.x += params.spinSpeedX;
       fractalGroup.rotation.y += params.spinSpeedY;
       fractalGroup.rotation.z += params.spinSpeedZ;
+
+      // If auto zoom is enabled, move the camera closer.
+      if (params.autoZoomEnabled) {
+        camera.position.z -= params.zoomSpeed;
+        // When the camera gets too close (center off-screen), reset and generate a new fractal.
+        if (camera.position.z < params.zoomThreshold) {
+          camera.position.z = startCameraZ;
+          // Optionally, you could adjust parameters (such as increasing recursion depth) here.
+          generateFractal();
+        }
+      }
+
       renderer.render(scene, camera);
     }
 
