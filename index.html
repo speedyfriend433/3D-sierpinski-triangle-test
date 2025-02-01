@@ -23,12 +23,10 @@
 </head>
 <body>
   <div id="gui"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Include OrbitControls -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
-  <!-- Include dat.GUI for parameter controls -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
-  <script>
+  <script type="module">
+    import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+    import { OrbitControls } from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/controls/OrbitControls.js';
+    import { GUI } from 'https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.module.js';
     // Set up scene, camera, renderer
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
